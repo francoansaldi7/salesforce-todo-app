@@ -1,0 +1,303 @@
+/* ── Dark theme tokens — cascade into lightning-card shadow DOM ───────────── */
+:host {
+    /* Direct rounding — token alone doesn't always apply visually */
+    display:       block;
+    border-radius: 16px;
+    overflow:      hidden;
+    /* Card background */
+    --sds-c-card-color-background:        #0f0f1e;
+    --sds-c-card-color-border:            #1e2a45;
+    --sds-c-card-radius-border:           12px;
+    /* Title / heading */
+    --sds-c-card-heading-color-text:      #4f8ef7; /* fallback token */
+    /* Body text */
+    --lwc-colorTextDefault:               #e2e8f0;
+    --lwc-colorTextLabel:                 #94a3b8;
+    --lwc-colorTextWeak:                  #64748b;
+    --lwc-colorTextLink:                  #4f8ef7;
+    /* Input / combobox surface */
+    --sds-c-input-color-background:       #111827;
+    --sds-c-input-color-border:           #1e2a45;
+    --sds-c-input-color-text:             #e2e8f0;
+    --sds-c-input-label-color-text:       #94a3b8;
+}
+
+/* ── Card title (slot) — direct CSS control, bypasses token unreliability ─── */
+.card-title {
+    color:       #4f8ef7;
+    font-weight: 700;
+    font-size:   1rem;
+}
+
+/* ── Task list ───────────────────────────────────────────────────────────── */
+.task-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.task-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #1e2a45;
+    gap: 0.5rem;
+    cursor: grab;
+}
+
+.task-item:last-child {
+    border-bottom: none;
+}
+
+.task-item:active {
+    cursor: grabbing;
+}
+
+.drag-handle {
+    --sds-c-icon-color-foreground-default: #64748b;
+    flex-shrink: 0;
+}
+
+/* ── Task name / link ────────────────────────────────────────────────────── */
+.task-name-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-name-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.task-link {
+    text-decoration: none;
+    color: #4f8ef7;
+    cursor: pointer;
+}
+
+.task-link:hover {
+    text-decoration: underline;
+    color: #93c5fd;
+}
+
+/* ── Priority indicator ──────────────────────────────────────────────────── */
+.priority-dot {
+    flex-shrink: 0;
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.priority-dot.priority-high {
+    background: #f43f5e;
+}
+
+.priority-dot.priority-medium {
+    background: #f59e0b;
+}
+
+.priority-dot.priority-low {
+    background: #34d399;
+}
+
+/* ── Category pill ───────────────────────────────────────────────────────── */
+.category-pill {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    background: #1e2a45;
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+}
+
+/* ── Recurring indicator ─────────────────────────────────────────────────── */
+.recurring-icon {
+    --sds-c-icon-color-foreground-default: #4f8ef7;
+    flex-shrink: 0;
+}
+
+/* ── Notes preview ───────────────────────────────────────────────────────── */
+.task-notes-preview {
+    margin: 0.15rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+.task-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Scale checkbox down to match the small icon buttons */
+.task-actions lightning-input {
+    transform:        scale(0.75);
+    transform-origin: center;
+}
+
+/* ── Add task row — plain flexbox so its left edge lines up exactly with the
+   toolbar row and task rows below (avoids SLDS grid/gutter offset quirks) ── */
+.add-task-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.add-task-field {
+    flex: 1;
+    min-width: 0;
+}
+
+/* New Task native input — direct color control (shadow DOM workaround) */
+.new-task-input {
+    color: #4f8ef7;
+}
+
+.add-btn {
+    flex-shrink: 0;
+}
+
+.delete-button {
+    --sds-c-icon-color-foreground-default: #f43f5e;
+}
+
+/* ── Search + bulk action toolbar ────────────────────────────────────────── */
+.toolbar-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 0;
+    color: #e2e8f0;
+}
+
+.bulk-action-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ── Inline edit ─────────────────────────────────────────────────────────── */
+.inline-edit-container {
+    display: flex;
+    flex-direction: column;
+    width: 85%;
+    gap: 0.5rem;
+}
+
+.edit-input {
+    min-width: 0;
+    color: #4f8ef7;
+}
+
+.edit-field-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.edit-combobox {
+    flex: 1;
+    min-width: 0;
+}
+
+.edit-notes {
+    width: 100%;
+    min-height: 2.5rem;
+    resize: vertical;
+    background: #111827;
+    border: 1px solid #1e2a45;
+    border-radius: 4px;
+    color: #e2e8f0;
+    padding: 0.5rem;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+/* ── Undo bar ─────────────────────────────────────────────────────────────── */
+.undo-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0 1rem 1rem;
+    padding: 0.6rem 1rem;
+    background: #1e2a45;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+}
+
+.undo-btn {
+    color: #4f8ef7;
+    font-weight: 700;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+/* ── Mobile: stack input above button, both full width ───────────────────── */
+@media (max-width: 768px) {
+
+    /* Stack the New Task input above the Add Task button, both full width */
+    .add-task-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .add-btn {
+        width: 100%;
+    }
+
+    /* Tighter button cluster — gives task text more horizontal room */
+    .task-actions {
+        gap: 0;
+    }
+
+    /* Stack search input above the bulk action button */
+    .toolbar-row {
+        flex-direction: column;
+    }
+
+    .bulk-action-btn {
+        width: 100%;
+    }
+
+    /* Inline edit: stretch input to full row and hide action buttons */
+    .inline-edit-container {
+        width: 100%;
+    }
+
+    .task-item:has(.inline-edit-container) .task-actions {
+        display: none;
+    }
+
+    /* Stack the priority/category/repeat comboboxes on narrow screens */
+    .edit-field-row {
+        flex-direction: column;
+    }
+
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #64748b;
+    font-style: italic;
+}

@@ -1,0 +1,151 @@
+/* ── Outer card: dark theme + rounded corners ────────────────────────────── */
+:host {
+    display:       block;
+    border-radius: 16px;
+    /* Background and border live on :host so rounded corners work without overflow:hidden */
+    background:    #0f0f1e;
+    border:        1px solid #1e2a45;
+    /* Make the lightning-card itself transparent — :host is the visual container */
+    --sds-c-card-color-background:   transparent;
+    --sds-c-card-color-border:       transparent;
+    --sds-c-card-shadow:             none;
+    --sds-c-card-radius-border:      0;
+    --sds-c-card-heading-color-text: #e2e8f0;
+}
+
+/* ── Desktop: white background ───────────────────────────────────────────── */
+@media (min-width: 769px) {
+    :host {
+        background: white;
+        border-color: #e5e7eb;
+    }
+}
+
+/* ── Greeting banner ──────────────────────────────────────────────────────── */
+.greeting-banner {
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    padding:         1rem 1.25rem;
+    margin:          1rem 1rem 0 1rem;
+    border-radius:   12px;
+    background:      linear-gradient(135deg, #4f8ef7 0%, #7c5cff 100%);
+    box-shadow:      0 4px 14px rgba(79, 142, 247, 0.35);
+}
+
+.greeting-banner__text,
+.greeting-banner__text strong {
+    /* Shimmering gradient "text fill" — animates background-position across the text */
+    background:              linear-gradient(90deg, #ffffff 0%, #bcd4ff 25%, #ffffff 50%, #bcd4ff 75%, #ffffff 100%);
+    background-size:         200% auto;
+    -webkit-background-clip: text;
+    background-clip:         text;
+    -webkit-text-fill-color: transparent;
+    color:                   transparent;
+    animation:               banner-shimmer 3s linear infinite;
+}
+
+.greeting-banner__text {
+    font-size:      3.15rem;
+    font-weight:    500;
+    letter-spacing: 0.01em;
+    text-align:     center;
+}
+
+.greeting-banner__text strong {
+    font-weight: 900;
+}
+
+@keyframes banner-shimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}
+
+/* Respect users who prefer reduced motion — fall back to a static white text */
+@media (prefers-reduced-motion: reduce) {
+    .greeting-banner__text,
+    .greeting-banner__text strong {
+        animation:               none;
+        background:              none;
+        -webkit-text-fill-color: #ffffff;
+        color:                   #ffffff;
+    }
+}
+
+@media (max-width: 768px) {
+    .greeting-banner {
+        margin:  0.75rem 0.75rem 0 0.75rem;
+        padding: 0.85rem 1rem;
+    }
+
+    .greeting-banner__text {
+        font-size: 2.85rem;
+    }
+}
+
+/* ── Desktop layout: two columns side by side ────────────────────────────── */
+.container {
+    display: flex;
+    width: 100%;
+}
+
+.column {
+    width:         50%;
+    padding:       1rem;
+    border-radius: 16px;
+}
+
+/* ── Mobile tab bar: hidden on desktop ───────────────────────────────────── */
+.mobile-tab-bar {
+    display: none;
+}
+
+/* ── Mobile styles ───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+    /* Show the tab switcher on mobile */
+    .mobile-tab-bar {
+        display:       flex;
+        border-bottom: 2px solid #1e2a45;
+        padding:       0 0.5rem;
+    }
+
+    /* Each tab button takes equal width */
+    .mobile-tab {
+        flex:          1;
+        padding:       0.75rem 0.5rem;
+        border:        none;
+        background:    transparent;
+        font-size:     0.9rem;
+        font-weight:   600;
+        color:         #94a3b8;
+        white-space:   nowrap;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px; /* overlap the bar-bottom so active border sits flush */
+        cursor:        pointer;
+        transition:    color 0.2s ease, border-color 0.2s ease;
+        text-align:    center;
+    }
+
+    /* Active tab: blue accent matching dark theme */
+    .mobile-tab--active {
+        color:               #4f8ef7;
+        border-bottom-color: #4f8ef7;
+    }
+
+    /* Stack columns vertically and stretch to full width */
+    .container {
+        flex-direction: column;
+    }
+
+    .column {
+        width:   100%;
+        padding: 0.5rem;
+    }
+
+    /* The inactive column is hidden — both components stay in the DOM
+       so refresh events work correctly across both lists */
+    .column--hidden {
+        display: none;
+    }
+}

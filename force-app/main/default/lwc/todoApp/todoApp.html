@@ -1,0 +1,52 @@
+<!--
+  @description       :
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             :
+  @last modified on  : 02-26-2026
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+<template>
+    <!-- Outer card provides the standard Salesforce component chrome -->
+    <lightning-card>
+
+        <!-- Greeting banner — welcomes the user at the top of the app -->
+        <div class="greeting-banner">
+            <span class="greeting-banner__text">Hey <strong>{firstName}</strong>! Let's get things done!</span>
+        </div>
+
+        <!-- Mobile tab bar — hidden on desktop via CSS, shown on screens ≤ 768px.
+             Tapping a button sets activeMobileTab which hides the inactive column. -->
+        <div class="mobile-tab-bar">
+            <button class={pendingTabClass} data-tab="pending" onclick={handleMobileTabSwitch}>
+                {pendingTabLabel}
+            </button>
+            <button class={completedTabClass} data-tab="completed" onclick={handleMobileTabSwitch}>
+                {completedTabLabel}
+            </button>
+        </div>
+
+        <!-- Two-column layout — CSS switches to single-column + hidden column on mobile -->
+        <div class="container">
+
+            <!-- Left column: pending tasks (create, edit, complete, delete) -->
+            <!-- onrefreshlists listens for the custom event fired when a task is toggled -->
+            <!-- onpendingcountchange keeps the mobile tab label's count in sync -->
+            <div class={pendingColumnClass}>
+                <c-todo-pending-list
+                    onrefreshlists={handleRefresh}
+                    onpendingcountchange={handlePendingCountChange}>
+                </c-todo-pending-list>
+            </div>
+
+            <!-- Right column: completed tasks (filter, uncomplete, delete) -->
+            <div class={completedColumnClass}>
+                <c-todo-completed-list
+                    onrefreshlists={handleRefresh}
+                    oncompletedcountchange={handleCompletedCountChange}>
+                </c-todo-completed-list>
+            </div>
+
+        </div>
+
+    </lightning-card>
+</template>

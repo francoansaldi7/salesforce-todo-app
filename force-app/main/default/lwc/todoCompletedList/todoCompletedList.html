@@ -1,0 +1,248 @@
+<!--
+  @description       :
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             :
+  @last modified on  : 03-02-2026
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+<template>
+
+    <lightning-card>
+        <span slot="title" class="card-title">{cardTitle}</span>
+
+        <!-- Header: filter dropdown that re-queries the list (All / This Week / This Month) -->
+        <!-- Changing the combobox value updates selectedFilter, which re-triggers the @wire -->
+        <div class="slds-p-around_medium">
+
+            <div class="filter-row">
+                <lightning-combobox
+                    label="Filter"
+                    class="filter-combobox"
+                    value={selectedFilter}
+                    options={filterOptions}
+                    onchange={handleFilterChange}>
+                </lightning-combobox>
+            </div>
+
+            <!-- Search + bulk action row -->
+            <div class="toolbar-row">
+                <input
+                    type="search"
+                    class="slds-input search-input"
+                    placeholder="Search completed tasks..."
+                    value={searchTerm}
+                    oninput={handleSearchChange}>
+
+                <template if:false={isArchivedView}>
+                    <button
+                        class="slds-button slds-button_destructive bulk-action-btn"
+                        disabled={hasNoTasks}
+                        onclick={handleClearCompleted}>
+                        Clear Completed
+                    </button>
+                </template>
+
+                <template if:true={isArchivedView}>
+                    <button
+                        class="slds-button slds-button_neutral bulk-action-btn"
+                        disabled={hasNoTasks}
+                        onclick={handleRestoreAll}>
+                        Restore All
+                    </button>
+                </template>
+            </div>
+
+        </div>
+
+        <!-- Scrollable list of completed tasks -->
+        <div class="slds-p-horizontal_medium task-list">
+
+            <!-- Loading spinner shown while data is fetching -->
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+            </template>
+
+            <!-- Task rows — only rendered when there is at least one matching completed task -->
+            <template if:true={hasVisibleTasks}>
+                <template for:each={filteredTasks} for:item="task">
+                    <div key={task.Id} class="task-item">
+
+                        <!-- READ-ONLY view: priority dot, task name link, category pill,
+                             recurring icon, and optional notes preview -->
+                        <template if:false={task.isEditing}>
+                            <div class="task-name-container">
+                                <div class="task-name-row">
+                                    <span class={task.priorityClass} title={task.Priority__c}></span>
+
+                                    <a
+                                        href="javascript:void(0);"
+                                        data-id={task.Id}
+                                        onclick={handleNavigateToRecord}
+                                        class="task-link">
+                                        {task.Name}
+                                    </a>
+
+                                    <template if:true={task.Category__c}>
+                                        <span class="category-pill">{task.Category__c}</span>
+                                    </template>
+
+                                    <template if:true={task.isRecurring}>
+                                        <lightning-icon
+                                            icon-name="utility:refresh"
+                                            size="xx-small"
+                                            class="recurring-icon"
+                                            title={task.Recurrence__c}
+                                            alternative-text="Recurring">
+                                        </lightning-icon>
+                                    </template>
+                                </div>
+
+                                <template if:true={task.hasNotes}>
+                                    <p class="task-notes-preview">{task.Notes__c}</p>
+                                </template>
+                            </div>
+                        </template>
+
+                        <!-- INLINE EDIT view: shown when the pencil icon is clicked -->
+                        <template if:true={task.isEditing}>
+                            <div class="inline-edit-container" onkeyup={handleEditKeyDown}>
+
+                                <input
+                                    type="text"
+                                    class="slds-input edit-input"
+                                    value={draft.name}
+                                    oninput={handleDraftNameChange} />
+
+                                <div class="edit-field-row">
+                                    <lightning-combobox
+                                        label="Priority"
+                                        variant="label-hidden"
+                                        placeholder="Priority"
+                                        class="edit-combobox"
+                                        value={draft.priority}
+                                        options={priorityOptions}
+                                        onchange={handleDraftPriorityChange}>
+                                    </lightning-combobox>
+
+                                    <lightning-combobox
+                                        label="Category"
+                                        variant="label-hidden"
+                                        placeholder="Category"
+                                        class="edit-combobox"
+                                        value={draft.category}
+                                        options={categoryOptions}
+                                        onchange={handleDraftCategoryChange}>
+                                    </lightning-combobox>
+
+                                    <lightning-combobox
+                                        label="Repeats"
+                                        variant="label-hidden"
+                                        placeholder="Repeats"
+                                        class="edit-combobox"
+                                        value={draft.recurrence}
+                                        options={recurrenceOptions}
+                                        onchange={handleDraftRecurrenceChange}>
+                                    </lightning-combobox>
+                                </div>
+
+                                <textarea
+                                    class="slds-textarea edit-notes"
+                                    placeholder="Notes"
+                                    value={draft.notes}
+                                    oninput={handleDraftNotesChange}></textarea>
+
+                                <div class="edit-actions">
+                                    <lightning-button-icon
+                                        icon-name="utility:check"
+                                        variant="bare"
+                                        data-id={task.Id}
+                                        alternative-text="Confirm"
+                                        onclick={handleSaveTask}>
+                                    </lightning-button-icon>
+
+                                    <lightning-button-icon
+                                        icon-name="utility:close"
+                                        variant="bare"
+                                        alternative-text="Cancel"
+                                        onclick={handleCancelEdit}>
+                                    </lightning-button-icon>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- ACTION BUTTONS: un-complete checkbox, edit pencil, delete × -->
+                        <div class="task-actions">
+
+                            <!-- checked attribute renders the box as already ticked;
+                                 un-ticking it calls toggleTaskStatus to move it back to Pending -->
+                            <lightning-input
+                                type="checkbox"
+                                alternative-text="Task Completed?"
+                                checked
+                                data-id={task.Id}
+                                onchange={handleCheckboxChange}>
+                            </lightning-input>
+
+                            <lightning-button-icon
+                                icon-name="utility:edit"
+                                variant="bare"
+                                size="small"
+                                data-id={task.Id}
+                                onclick={handleEditTask}
+                                alternative-text="Edit Task">
+                            </lightning-button-icon>
+
+                            <template if:true={isArchivedView}>
+                                <lightning-button-icon
+                                    icon-name="utility:undo"
+                                    variant="bare"
+                                    size="small"
+                                    class="restore-button"
+                                    data-id={task.Id}
+                                    onclick={handleRestoreTask}
+                                    alternative-text="Restore Task">
+                                </lightning-button-icon>
+                            </template>
+
+                            <lightning-button-icon
+                                icon-name="utility:close"
+                                alternative-text="Delete Task"
+                                variant="bare"
+                                class="delete-button"
+                                data-id={task.Id}
+                                onclick={handleDeleteTask}>
+                            </lightning-button-icon>
+
+                        </div>
+
+                    </div>
+                </template>
+            </template>
+
+            <!-- Empty state: shown when loading is done and no tasks match the filter at all -->
+            <template if:true={showEmptyState}>
+                <div class="empty-state">
+                    <p>{emptyStateMessage}</p>
+                </div>
+            </template>
+
+            <!-- No-results state: shown when a search filters out every task -->
+            <template if:true={showNoResultsState}>
+                <div class="empty-state">
+                    <p>No completed tasks match "{searchTerm}".</p>
+                </div>
+            </template>
+
+        </div>
+
+        <!-- Undo bar: appears briefly after a delete so the user can reverse it -->
+        <template if:true={pendingDeletion}>
+            <div class="undo-bar">
+                <span>Task deleted.</span>
+                <button class="slds-button slds-button_reset undo-btn" onclick={handleUndoDelete}>Undo</button>
+            </div>
+        </template>
+
+    </lightning-card>
+
+</template>

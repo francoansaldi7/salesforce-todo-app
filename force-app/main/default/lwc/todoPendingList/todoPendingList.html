@@ -1,0 +1,262 @@
+<!--
+  @description       :
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             :
+  @last modified on  : 03-02-2026
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+<template>
+
+    <lightning-card>
+        <span slot="title" class="card-title">{cardTitle}</span>
+
+        <!-- HEADER: new task input + add button -->
+        <!-- onkeydown lets the user press Enter instead of clicking the button -->
+        <div class="slds-p-around_medium">
+
+            <div class="add-task-row">
+
+                <!-- Input field for the new task name -->
+                <div class="slds-form-element add-task-field">
+                    <label class="slds-form-element__label">New Task</label>
+                    <div class="slds-form-element__control">
+                        <input
+                            type="text"
+                            class="slds-input new-task-input"
+                            value={newTaskName}
+                            oninput={handleInputChange}
+                            onkeydown={handleAddKeyDown}>
+                    </div>
+                </div>
+
+                <!-- "Add" button aligned to the bottom of the input -->
+                <!-- Native SLDS button used instead of lightning-button so CSS can
+                     stretch it to full width on mobile (shadow DOM blocks width on LWC components) -->
+                <button class="slds-button slds-button_brand add-btn" onclick={handleAddTask}>
+                    Add Task
+                </button>
+
+            </div>
+
+            <!-- Search + bulk action row -->
+            <div class="toolbar-row">
+                <input
+                    type="search"
+                    class="slds-input search-input"
+                    placeholder="Search pending tasks..."
+                    value={searchTerm}
+                    oninput={handleSearchChange}>
+
+                <button
+                    class="slds-button slds-button_neutral bulk-action-btn"
+                    disabled={hasNoTasks}
+                    onclick={handleMarkAllComplete}>
+                    Mark All Complete
+                </button>
+            </div>
+
+        </div>
+
+        <!-- LIST: scrollable area that holds all pending task rows -->
+        <div class="slds-p-horizontal_medium task-list">
+
+            <!-- Loading spinner shown until the first @wire response arrives -->
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+            </template>
+
+            <!-- Task rows — only rendered when there is at least one task -->
+            <template if:true={hasVisibleTasks}>
+                <template for:each={filteredTasks} for:item="task">
+
+                    <!-- Each task row: key must be unique so LWC can track DOM changes.
+                         Draggable so the user can manually reorder pending tasks. -->
+                    <div
+                        key={task.Id}
+                        class="task-item"
+                        data-id={task.Id}
+                        draggable="true"
+                        ondragstart={handleDragStart}
+                        ondragover={handleDragOver}
+                        ondrop={handleDrop}
+                        ondragend={handleDragEnd}>
+
+                        <!-- Drag handle — grabbing anywhere on the row also works,
+                             this just signals that the row is draggable -->
+                        <lightning-icon
+                            icon-name="utility:drag_and_drop"
+                            size="xx-small"
+                            class="drag-handle"
+                            alternative-text="Drag to reorder">
+                        </lightning-icon>
+
+                        <!-- READ-ONLY view: priority dot, task name link, category pill,
+                             recurring icon, and optional notes preview -->
+                        <!-- Clicking the name navigates to the Salesforce record page -->
+                        <template if:false={task.isEditing}>
+                            <div class="task-name-container">
+                                <div class="task-name-row">
+                                    <span class={task.priorityClass} title={task.Priority__c}></span>
+
+                                    <a
+                                        href="javascript:void(0);"
+                                        data-id={task.Id}
+                                        onclick={handleNavigateToRecord}
+                                        class="task-link">
+                                        {task.Name}
+                                    </a>
+
+                                    <template if:true={task.Category__c}>
+                                        <span class="category-pill">{task.Category__c}</span>
+                                    </template>
+
+                                    <template if:true={task.isRecurring}>
+                                        <lightning-icon
+                                            icon-name="utility:refresh"
+                                            size="xx-small"
+                                            class="recurring-icon"
+                                            title={task.Recurrence__c}
+                                            alternative-text="Recurring">
+                                        </lightning-icon>
+                                    </template>
+                                </div>
+
+                                <template if:true={task.hasNotes}>
+                                    <p class="task-notes-preview">{task.Notes__c}</p>
+                                </template>
+                            </div>
+                        </template>
+
+                        <!-- INLINE EDIT view: shown when the pencil icon is clicked -->
+                        <!-- onkeyup handles Enter (save) and Escape (cancel) shortcuts -->
+                        <template if:true={task.isEditing}>
+                            <div class="inline-edit-container" onkeyup={handleEditKeyDown}>
+
+                                <input
+                                    type="text"
+                                    class="slds-input edit-input"
+                                    value={draft.name}
+                                    oninput={handleDraftNameChange} />
+
+                                <div class="edit-field-row">
+                                    <lightning-combobox
+                                        label="Priority"
+                                        variant="label-hidden"
+                                        placeholder="Priority"
+                                        class="edit-combobox"
+                                        value={draft.priority}
+                                        options={priorityOptions}
+                                        onchange={handleDraftPriorityChange}>
+                                    </lightning-combobox>
+
+                                    <lightning-combobox
+                                        label="Category"
+                                        variant="label-hidden"
+                                        placeholder="Category"
+                                        class="edit-combobox"
+                                        value={draft.category}
+                                        options={categoryOptions}
+                                        onchange={handleDraftCategoryChange}>
+                                    </lightning-combobox>
+
+                                    <lightning-combobox
+                                        label="Repeats"
+                                        variant="label-hidden"
+                                        placeholder="Repeats"
+                                        class="edit-combobox"
+                                        value={draft.recurrence}
+                                        options={recurrenceOptions}
+                                        onchange={handleDraftRecurrenceChange}>
+                                    </lightning-combobox>
+                                </div>
+
+                                <textarea
+                                    class="slds-textarea edit-notes"
+                                    placeholder="Notes"
+                                    value={draft.notes}
+                                    oninput={handleDraftNotesChange}></textarea>
+
+                                <!-- Confirm (✓) and Cancel (✕) icon buttons -->
+                                <div class="edit-actions">
+                                    <lightning-button-icon
+                                        icon-name="utility:check"
+                                        variant="bare"
+                                        data-id={task.Id}
+                                        alternative-text="Confirm"
+                                        onclick={handleSaveTask}>
+                                    </lightning-button-icon>
+
+                                    <lightning-button-icon
+                                        icon-name="utility:close"
+                                        variant="bare"
+                                        alternative-text="Cancel"
+                                        onclick={handleCancelEdit}>
+                                    </lightning-button-icon>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- ACTION BUTTONS: complete checkbox, edit pencil, delete × -->
+                        <!-- data-id passes the task Id to each handler via event.currentTarget.dataset.id -->
+                        <div class="task-actions">
+
+                            <lightning-input
+                                type="checkbox"
+                                data-id={task.Id}
+                                alternative-text="Task Complete"
+                                onchange={handleCheckboxChange}>
+                            </lightning-input>
+
+                            <lightning-button-icon
+                                icon-name="utility:edit"
+                                variant="bare"
+                                size="small"
+                                data-id={task.Id}
+                                onclick={handleEditTask}
+                                alternative-text="Edit Task">
+                            </lightning-button-icon>
+
+                            <lightning-button-icon
+                                icon-name="utility:close"
+                                variant="bare"
+                                size="small"
+                                class="delete-button"
+                                data-id={task.Id}
+                                alternative-text="Delete Task"
+                                onclick={handleDeleteTask}>
+                            </lightning-button-icon>
+
+                        </div>
+
+                    </div>
+
+                </template>
+            </template>
+
+            <!-- Empty state: shown when loading is done and there are no tasks at all -->
+            <template if:true={showEmptyState}>
+                <div class="empty-state">
+                    <p>No pending tasks. Add your first task!</p>
+                </div>
+            </template>
+
+            <!-- No-results state: shown when a search filters out every task -->
+            <template if:true={showNoResultsState}>
+                <div class="empty-state">
+                    <p>No pending tasks match "{searchTerm}".</p>
+                </div>
+            </template>
+
+        </div>
+
+        <!-- Undo bar: appears briefly after a delete so the user can reverse it -->
+        <template if:true={pendingDeletion}>
+            <div class="undo-bar">
+                <span>Task deleted.</span>
+                <button class="slds-button slds-button_reset undo-btn" onclick={handleUndoDelete}>Undo</button>
+            </div>
+        </template>
+
+    </lightning-card>
+
+</template>

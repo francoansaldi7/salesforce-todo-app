@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Archived__c</fullName>
+    <defaultValue>false</defaultValue>
+    <label>Archived</label>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Checkbox</type>
+    <description>When true, this completed task is hidden from the normal Completed list (cleared via "Clear Completed") but not deleted. It can be restored back into view.</description>
+</CustomField>
