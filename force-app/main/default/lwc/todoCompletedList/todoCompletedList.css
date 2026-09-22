@@ -205,6 +205,26 @@
     margin-top: 0.5rem;
 }
 
+/* ── Pagination ───────────────────────────────────────────────────────────── */
+.pagination-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #1e2a45;
+}
+
+.pagination-btn {
+    flex-shrink: 0;
+}
+
+.pagination-label {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
 /* ── Undo bar ─────────────────────────────────────────────────────────────── */
 .undo-bar {
     display: flex;
@@ -240,6 +260,16 @@
 
     .bulk-action-btn {
         width: 100%;
+    }
+
+    /* Tighter pagination row on narrow screens */
+    .pagination-row {
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+
+    .pagination-label {
+        font-size: 0.75rem;
     }
 
     /* Stack the priority/category/repeat comboboxes on narrow screens */

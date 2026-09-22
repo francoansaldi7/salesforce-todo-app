@@ -7,41 +7,102 @@
 **/
 public with sharing class TaskController {
 
+    // Both lists page in fixed windows of this size rather than loading everything
+    // at once — keeps each server round trip small no matter how many tasks exist.
+    private static final Integer PAGE_SIZE = 15;
+
+    // Wire result shape for both paginated list methods: the current page of records,
+    // plus the total row count across every page (so the client can render "Page X of Y"
+    // and disable Next appropriately) — one round trip instead of two.
+    public class PagedTasks {
+        @AuraEnabled public List<To_Do_Task__c> records;
+        @AuraEnabled public Integer totalCount;
+
+        public PagedTasks(List<To_Do_Task__c> records, Integer totalCount) {
+            this.records = records;
+            this.totalCount = totalCount;
+        }
+    }
+
+    // Turns a 1-based page number into a safe SOQL OFFSET.
+    private static Integer offsetFor(Integer pageNumber) {
+        Integer safePage = (pageNumber == null || pageNumber < 1) ? 1 : pageNumber;
+        return (safePage - 1) * PAGE_SIZE;
+    }
+
+    // Wraps a raw search term into a SOQL LIKE pattern. An empty/blank term produces
+    // '%%', which matches every row — i.e. no filtering — so callers don't need to
+    // branch on whether a search is active.
+    private static String likePattern(String searchTerm) {
+        return '%' + (searchTerm == null ? '' : searchTerm) + '%';
+    }
+
+    // searchTerm filters by task Name — Notes__c is a Long Text Area, and Salesforce
+    // doesn't allow SOQL WHERE clauses to filter on that field type. cacheBuster is
+    // never read — its only job is to give the client's @wire cache a fresh key on
+    // every call. Without it, paging back to a page (or search term) the client
+    // already queried earlier in the session can silently replay a stale cached
+    // response after a mutation, because refreshApex only busts the cache entry for
+    // the currently active parameters.
     @AuraEnabled(cacheable=true)
-    public static List<To_Do_Task__c> getPendingTasks() {
-        return [
+    public static PagedTasks getPendingTasks(String searchTerm, Integer pageNumber, Integer cacheBuster) {
+        String pattern = likePattern(searchTerm);
+        Integer pageOffset = offsetFor(pageNumber);
+
+        Integer totalCount = [
+            SELECT COUNT()
+            FROM To_Do_Task__c
+            WHERE Completed__c = false
+            AND OwnerId = :UserInfo.getUserId()
+            AND Name LIKE :pattern
+            WITH SECURITY_ENFORCED
+        ];
+
+        List<To_Do_Task__c> records = [
             SELECT Id, Name, Completed__c, Priority__c, Category__c, Notes__c, Sort_Order__c, Recurrence__c
             FROM To_Do_Task__c
             WHERE Completed__c = false
             AND OwnerId = :UserInfo.getUserId()
+            AND Name LIKE :pattern
             WITH SECURITY_ENFORCED
             ORDER BY Sort_Order__c ASC NULLS LAST, CreatedDate DESC
-            LIMIT 200
+            LIMIT :PAGE_SIZE
+            OFFSET :pageOffset
         ];
+
+        return new PagedTasks(records, totalCount);
     }
 
-    // cacheBuster is never used in the query — its only job is to give the client's
-    // @wire cache a fresh key on every call. Without it, switching between filter
-    // values (e.g. All -> Archived) can silently replay a stale cached response for
-    // a filter value the client already queried earlier in the session, even after
-    // a mutation (like Clear Completed) has changed what that filter should return —
-    // because refreshApex only busts the cache entry for the currently active filter.
     @AuraEnabled(cacheable=true)
-    public static List<To_Do_Task__c> getCompletedTasks(String filterType, Integer cacheBuster) {
+    public static PagedTasks getCompletedTasks(String filterType, String searchTerm, Integer pageNumber, Integer cacheBuster) {
+        String pattern = likePattern(searchTerm);
+        Integer pageOffset = offsetFor(pageNumber);
 
         // The Archived view shows tasks "Clear Completed" hid from the normal list —
         // it's the only view that includes Archived__c = true records.
         if (filterType == 'ARCHIVED') {
-            return [
+            Integer totalCount = [
+                SELECT COUNT()
+                FROM To_Do_Task__c
+                WHERE Status__c = 'Completed'
+                AND Archived__c = true
+                AND OwnerId = :UserInfo.getUserId()
+                AND Name LIKE :pattern
+                WITH SECURITY_ENFORCED
+            ];
+            List<To_Do_Task__c> records = [
                 SELECT Id, Name, Completed_Date__c, Priority__c, Category__c, Notes__c, Recurrence__c
                 FROM To_Do_Task__c
                 WHERE Status__c = 'Completed'
                 AND Archived__c = true
                 AND OwnerId = :UserInfo.getUserId()
+                AND Name LIKE :pattern
                 WITH SECURITY_ENFORCED
                 ORDER BY Completed_Date__c DESC NULLS LAST
-                LIMIT 200
+                LIMIT :PAGE_SIZE
+                OFFSET :pageOffset
             ];
+            return new PagedTasks(records, totalCount);
         }
 
         Date startDate;
@@ -53,28 +114,53 @@ public with sharing class TaskController {
         }
 
         if (startDate != null) {
-            return [
+            Integer totalCount = [
+                SELECT COUNT()
+                FROM To_Do_Task__c
+                WHERE Status__c = 'Completed'
+                AND Archived__c = false
+                AND OwnerId = :UserInfo.getUserId()
+                AND Completed_Date__c >= :startDate
+                AND Name LIKE :pattern
+                WITH SECURITY_ENFORCED
+            ];
+            List<To_Do_Task__c> records = [
                 SELECT Id, Name, Completed_Date__c, Priority__c, Category__c, Notes__c, Recurrence__c
                 FROM To_Do_Task__c
                 WHERE Status__c = 'Completed'
                 AND Archived__c = false
                 AND OwnerId = :UserInfo.getUserId()
                 AND Completed_Date__c >= :startDate
+                AND Name LIKE :pattern
                 WITH SECURITY_ENFORCED
                 ORDER BY Completed_Date__c DESC NULLS LAST
-                LIMIT 200
+                LIMIT :PAGE_SIZE
+                OFFSET :pageOffset
             ];
+            return new PagedTasks(records, totalCount);
         } else {
-            return [
+            Integer totalCount = [
+                SELECT COUNT()
+                FROM To_Do_Task__c
+                WHERE Status__c = 'Completed'
+                AND Archived__c = false
+                AND OwnerId = :UserInfo.getUserId()
+                AND Name LIKE :pattern
+                WITH SECURITY_ENFORCED
+            ];
+            List<To_Do_Task__c> records = [
                 SELECT Id, Name, Completed_Date__c, Priority__c, Category__c, Notes__c, Recurrence__c
                 FROM To_Do_Task__c
                 WHERE Status__c = 'Completed'
                 AND Archived__c = false
                 AND OwnerId = :UserInfo.getUserId()
+                AND Name LIKE :pattern
                 WITH SECURITY_ENFORCED
                 ORDER BY Completed_Date__c DESC NULLS LAST
-                LIMIT 200
+                LIMIT :PAGE_SIZE
+                OFFSET :pageOffset
             ];
+            return new PagedTasks(records, totalCount);
         }
     }
 
@@ -214,9 +300,16 @@ public with sharing class TaskController {
     // records — re-querying ownership here (rather than trusting the client-supplied
     // list) prevents one user from reordering (or discovering the existence of)
     // another user's tasks.
+    //
+    // startIndex offsets the assigned Sort_Order__c values so a reorder on page 2 (say)
+    // doesn't overwrite page 1's ordering — only one page's worth of tasks is ever in
+    // the DOM at a time, so the client passes the dragged page's own starting offset
+    // (page 2 with a page size of 15 passes 15, meaning these tasks get orders 15-29).
     @AuraEnabled
-    public static void reorderTasks(List<Id> orderedTaskIds) {
+    public static void reorderTasks(List<Id> orderedTaskIds, Integer startIndex) {
         try {
+            Integer safeStartIndex = (startIndex == null || startIndex < 0) ? 0 : startIndex;
+
             Set<Id> ownedIds = new Set<Id>();
             for (To_Do_Task__c t : [
                 SELECT Id
@@ -231,7 +324,7 @@ public with sharing class TaskController {
             List<To_Do_Task__c> updates = new List<To_Do_Task__c>();
             for (Integer i = 0; i < orderedTaskIds.size(); i++) {
                 if (ownedIds.contains(orderedTaskIds[i])) {
-                    updates.add(new To_Do_Task__c(Id = orderedTaskIds[i], Sort_Order__c = i));
+                    updates.add(new To_Do_Task__c(Id = orderedTaskIds[i], Sort_Order__c = safeStartIndex + i));
                 }
             }
 

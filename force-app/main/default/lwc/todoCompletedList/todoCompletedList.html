@@ -64,7 +64,7 @@
 
             <!-- Task rows — only rendered when there is at least one matching completed task -->
             <template if:true={hasVisibleTasks}>
-                <template for:each={filteredTasks} for:item="task">
+                <template for:each={tasks} for:item="task">
                     <div key={task.Id} class="task-item">
 
                         <!-- READ-ONLY view: priority dot, task name link, category pill,
@@ -234,6 +234,25 @@
             </template>
 
         </div>
+
+        <!-- Pagination: only shown once there's more than one page -->
+        <template if:true={showPagination}>
+            <div class="pagination-row">
+                <button
+                    class="slds-button slds-button_neutral pagination-btn"
+                    disabled={isFirstPage}
+                    onclick={handlePreviousPage}>
+                    ‹ Previous
+                </button>
+                <span class="pagination-label">{paginationLabel}</span>
+                <button
+                    class="slds-button slds-button_neutral pagination-btn"
+                    disabled={isLastPage}
+                    onclick={handleNextPage}>
+                    Next ›
+                </button>
+            </div>
+        </template>
 
         <!-- Undo bar: appears briefly after a delete so the user can reverse it -->
         <template if:true={pendingDeletion}>

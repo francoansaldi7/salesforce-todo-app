@@ -59,18 +59,34 @@ private class TaskControllerTest {
         return u;
     }
 
+    // Inserts extra pending tasks named 'Bulk Pending N' (1-based) so pagination tests
+    // have more than one page's worth of data (page size is 15) without hardcoding it
+    // in every test.
+    private static void insertBulkPendingTasks(Integer count) {
+        List<To_Do_Task__c> tasks = new List<To_Do_Task__c>();
+        for (Integer i = 1; i <= count; i++) {
+            tasks.add(new To_Do_Task__c(
+                Name = 'Bulk Pending ' + i,
+                Completed__c = false,
+                Status__c = 'Pending'
+            ));
+        }
+        insert tasks;
+    }
+
     // ─── getPendingTasks ──────────────────────────────────────────────────────
 
     /** Verifies that only non-completed tasks owned by the current user are returned. */
     @IsTest
     static void testGetPendingTasks_returnsOnlyPendingForCurrentUser() {
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getPendingTasks();
+        TaskController.PagedTasks page = TaskController.getPendingTasks(null, 1, 0);
         Test.stopTest();
 
-        Assert.isNotNull(result);
-        Assert.areEqual(2, result.size()); // exactly the 2 pending tasks from setup
-        for (To_Do_Task__c t : result) {
+        Assert.isNotNull(page.records);
+        Assert.areEqual(2, page.records.size()); // exactly the 2 pending tasks from setup
+        Assert.areEqual(2, page.totalCount);
+        for (To_Do_Task__c t : page.records) {
             Assert.isFalse(t.Completed__c); // no completed tasks should slip through
         }
     }
@@ -89,11 +105,59 @@ private class TaskControllerTest {
         };
 
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getPendingTasks();
+        List<To_Do_Task__c> records = TaskController.getPendingTasks(null, 1, 0).records;
         Test.stopTest();
 
-        Assert.areEqual('Pending Task 2', result[0].Name);
-        Assert.areEqual('Pending Task 1', result[1].Name);
+        Assert.areEqual('Pending Task 2', records[0].Name);
+        Assert.areEqual('Pending Task 1', records[1].Name);
+    }
+
+    /** With more than one page of pending tasks, page 1 must hold exactly 15 records
+     *  and totalCount must reflect every pending task, not just the current page. */
+    @IsTest
+    static void testGetPendingTasks_page1_returnsFirstFifteenOfTotal() {
+        insertBulkPendingTasks(20); // + the 2 from setup = 22 total pending
+
+        Test.startTest();
+        TaskController.PagedTasks page = TaskController.getPendingTasks(null, 1, 0);
+        Test.stopTest();
+
+        Assert.areEqual(15, page.records.size(), 'Page 1 must hold exactly one page size worth of records');
+        Assert.areEqual(22, page.totalCount, 'totalCount must reflect every pending task, not just this page');
+    }
+
+    /** Page 2 must hold the remainder of the records not shown on page 1. */
+    @IsTest
+    static void testGetPendingTasks_page2_returnsRemainder() {
+        insertBulkPendingTasks(20); // + the 2 from setup = 22 total pending
+
+        Test.startTest();
+        TaskController.PagedTasks page = TaskController.getPendingTasks(null, 2, 0);
+        Test.stopTest();
+
+        Assert.areEqual(7, page.records.size(), '22 total - 15 on page 1 = 7 remaining on page 2');
+        Assert.areEqual(22, page.totalCount);
+    }
+
+    /** searchTerm must filter pending tasks by name (case-insensitive substring match). */
+    @IsTest
+    static void testGetPendingTasks_searchTerm_filtersByName() {
+        Test.startTest();
+        TaskController.PagedTasks page = TaskController.getPendingTasks('pending task 1', 1, 0);
+        Test.stopTest();
+
+        Assert.areEqual(1, page.totalCount);
+        Assert.areEqual('Pending Task 1', page.records[0].Name);
+    }
+
+    /** A blank searchTerm must behave exactly like no search — every task matches. */
+    @IsTest
+    static void testGetPendingTasks_blankSearchTerm_returnsEverything() {
+        Test.startTest();
+        TaskController.PagedTasks page = TaskController.getPendingTasks('', 1, 0);
+        Test.stopTest();
+
+        Assert.areEqual(2, page.totalCount);
     }
 
     // ─── getCompletedTasks ────────────────────────────────────────────────────
@@ -102,41 +166,41 @@ private class TaskControllerTest {
     @IsTest
     static void testGetCompletedTasks_allFilter_returnsAllCompleted() {
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('', null, 1, 0);
         Test.stopTest();
 
-        Assert.areEqual(1, result.size());
-        Assert.areEqual('Completed Task', result[0].Name);
+        Assert.areEqual(1, page.records.size());
+        Assert.areEqual('Completed Task', page.records[0].Name);
     }
 
     /** WEEK filter — setup task was completed today, so it must be included. */
     @IsTest
     static void testGetCompletedTasks_weekFilter_includesTaskCompletedToday() {
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('WEEK', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('WEEK', null, 1, 0);
         Test.stopTest();
 
-        Assert.areEqual(1, result.size());
+        Assert.areEqual(1, page.records.size());
     }
 
     /** MONTH filter — same logic as WEEK; today's task must appear. */
     @IsTest
     static void testGetCompletedTasks_monthFilter_includesTaskCompletedToday() {
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('MONTH', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('MONTH', null, 1, 0);
         Test.stopTest();
 
-        Assert.areEqual(1, result.size());
+        Assert.areEqual(1, page.records.size());
     }
 
     /** Any unrecognised filter value falls through to the "all" else branch. */
     @IsTest
     static void testGetCompletedTasks_unknownFilter_returnsAll() {
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('UNKNOWN', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('UNKNOWN', null, 1, 0);
         Test.stopTest();
 
-        Assert.areEqual(1, result.size());
+        Assert.areEqual(1, page.records.size());
     }
 
     /** Inserts a task completed 2 months ago and confirms the WEEK filter excludes it. */
@@ -151,11 +215,29 @@ private class TaskControllerTest {
         insert oldTask;
 
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('WEEK', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('WEEK', null, 1, 0);
         Test.stopTest();
 
         // Only the task from @TestSetup (completed today) should remain
-        Assert.areEqual(1, result.size(), 'Only this week\'s task should be returned');
+        Assert.areEqual(1, page.records.size(), 'Only this week\'s task should be returned');
+    }
+
+    /** searchTerm must filter completed tasks by name too. */
+    @IsTest
+    static void testGetCompletedTasks_searchTerm_filtersByName() {
+        insert new To_Do_Task__c(
+            Name = 'Another Completed Thing',
+            Completed__c = true,
+            Status__c = 'Completed',
+            Completed_Date__c = Date.today()
+        );
+
+        Test.startTest();
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('', 'Another', 1, 0);
+        Test.stopTest();
+
+        Assert.areEqual(1, page.totalCount);
+        Assert.areEqual('Another Completed Thing', page.records[0].Name);
     }
 
     // ─── toggleTaskStatus ─────────────────────────────────────────────────────
@@ -293,7 +375,7 @@ private class TaskControllerTest {
         User otherUser = createOtherUser();
 
         System.runAs(otherUser) {
-            TaskController.reorderTasks(new List<Id>{ task.Id });
+            TaskController.reorderTasks(new List<Id>{ task.Id }, 0);
         }
 
         To_Do_Task__c unchanged = [SELECT Sort_Order__c FROM To_Do_Task__c WHERE Id = :task.Id];
@@ -428,14 +510,15 @@ private class TaskControllerTest {
 
     // ─── reorderTasks ─────────────────────────────────────────────────────────
 
-    /** Reordering must assign Sort_Order__c sequentially, matching the given Id order. */
+    /** Reordering with no start index (page 1) must assign Sort_Order__c sequentially
+     *  from 0, matching the given Id order. */
     @IsTest
     static void testReorderTasks_setsSequentialSortOrder() {
         To_Do_Task__c task1 = [SELECT Id FROM To_Do_Task__c WHERE Name = 'Pending Task 1' LIMIT 1];
         To_Do_Task__c task2 = [SELECT Id FROM To_Do_Task__c WHERE Name = 'Pending Task 2' LIMIT 1];
 
         Test.startTest();
-        TaskController.reorderTasks(new List<Id>{ task2.Id, task1.Id });
+        TaskController.reorderTasks(new List<Id>{ task2.Id, task1.Id }, 0);
         Test.stopTest();
 
         Map<Id, To_Do_Task__c> updated = new Map<Id, To_Do_Task__c>(
@@ -443,6 +526,25 @@ private class TaskControllerTest {
         );
         Assert.areEqual(0, updated.get(task2.Id).Sort_Order__c);
         Assert.areEqual(1, updated.get(task1.Id).Sort_Order__c);
+    }
+
+    /** Reordering a later page must offset Sort_Order__c by the given startIndex, so it
+     *  doesn't collide with an earlier page's ordering (e.g. page 2 with a 15-per-page
+     *  size starts at 15). */
+    @IsTest
+    static void testReorderTasks_withStartIndex_offsetsSortOrder() {
+        To_Do_Task__c task1 = [SELECT Id FROM To_Do_Task__c WHERE Name = 'Pending Task 1' LIMIT 1];
+        To_Do_Task__c task2 = [SELECT Id FROM To_Do_Task__c WHERE Name = 'Pending Task 2' LIMIT 1];
+
+        Test.startTest();
+        TaskController.reorderTasks(new List<Id>{ task2.Id, task1.Id }, 15);
+        Test.stopTest();
+
+        Map<Id, To_Do_Task__c> updated = new Map<Id, To_Do_Task__c>(
+            [SELECT Id, Sort_Order__c FROM To_Do_Task__c WHERE Id IN :new List<Id>{ task1.Id, task2.Id }]
+        );
+        Assert.areEqual(15, updated.get(task2.Id).Sort_Order__c);
+        Assert.areEqual(16, updated.get(task1.Id).Sort_Order__c);
     }
 
     // ─── markAllTasksComplete ─────────────────────────────────────────────────
@@ -498,10 +600,10 @@ private class TaskControllerTest {
         TaskController.clearCompletedTasks();
 
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('', null, 1, 0);
         Test.stopTest();
 
-        Assert.areEqual(0, result.size(), 'Archived tasks must not appear in the normal completed list');
+        Assert.areEqual(0, page.records.size(), 'Archived tasks must not appear in the normal completed list');
     }
 
     /** The ARCHIVED filter must return exactly the tasks "Clear Completed" archived. */
@@ -510,11 +612,11 @@ private class TaskControllerTest {
         TaskController.clearCompletedTasks();
 
         Test.startTest();
-        List<To_Do_Task__c> result = TaskController.getCompletedTasks('ARCHIVED', 0);
+        TaskController.PagedTasks page = TaskController.getCompletedTasks('ARCHIVED', null, 1, 0);
         Test.stopTest();
 
-        Assert.areEqual(1, result.size());
-        Assert.areEqual('Completed Task', result[0].Name);
+        Assert.areEqual(1, page.records.size());
+        Assert.areEqual('Completed Task', page.records[0].Name);
     }
 
     /** Restoring an archived task must bring it back into the normal completed view. */
@@ -527,11 +629,11 @@ private class TaskControllerTest {
         TaskController.restoreArchivedTask(task.Id);
         Test.stopTest();
 
-        List<To_Do_Task__c> normalView = TaskController.getCompletedTasks('', 0);
-        Assert.areEqual(1, normalView.size(), 'The restored task must appear in the normal view again');
+        TaskController.PagedTasks normalView = TaskController.getCompletedTasks('', null, 1, 0);
+        Assert.areEqual(1, normalView.records.size(), 'The restored task must appear in the normal view again');
 
-        List<To_Do_Task__c> archivedView = TaskController.getCompletedTasks('ARCHIVED', 0);
-        Assert.areEqual(0, archivedView.size(), 'The restored task must no longer appear in the Archived view');
+        TaskController.PagedTasks archivedView = TaskController.getCompletedTasks('ARCHIVED', null, 1, 0);
+        Assert.areEqual(0, archivedView.records.size(), 'The restored task must no longer appear in the Archived view');
     }
 
     /** A different user must not be able to restore a task they don't own. */
@@ -568,11 +670,11 @@ private class TaskControllerTest {
         TaskController.restoreAllArchivedTasks();
         Test.stopTest();
 
-        List<To_Do_Task__c> normalView = TaskController.getCompletedTasks('', 0);
-        Assert.areEqual(2, normalView.size(), 'Both tasks must be back in the normal completed view');
+        TaskController.PagedTasks normalView = TaskController.getCompletedTasks('', null, 1, 0);
+        Assert.areEqual(2, normalView.records.size(), 'Both tasks must be back in the normal completed view');
 
-        List<To_Do_Task__c> archivedView = TaskController.getCompletedTasks('ARCHIVED', 0);
-        Assert.areEqual(0, archivedView.size(), 'Nothing should remain archived');
+        TaskController.PagedTasks archivedView = TaskController.getCompletedTasks('ARCHIVED', null, 1, 0);
+        Assert.areEqual(0, archivedView.records.size(), 'Nothing should remain archived');
     }
 
     /** Restoring all must only touch the running user's own archived tasks. */

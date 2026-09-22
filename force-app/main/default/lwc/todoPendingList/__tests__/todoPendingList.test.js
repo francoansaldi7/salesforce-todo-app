@@ -54,8 +54,17 @@ const MOCK_TASKS = [
     }
 ];
 
+function page(records, totalCount) {
+    return { records, totalCount: totalCount === undefined ? records.length : totalCount };
+}
+
 function flushPromises() {
     return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// Waits out the search debounce (300ms) plus a little slack, then flushes microtasks.
+function flushDebounce() {
+    return new Promise(resolve => setTimeout(resolve, 350));
 }
 
 describe('c-todo-pending-list', () => {
@@ -70,7 +79,7 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const links = element.shadowRoot.querySelectorAll('.task-link');
@@ -82,7 +91,7 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit([]);
+        getPendingTasksAdapter.emit(page([], 0));
         await flushPromises();
 
         const emptyState = element.shadowRoot.querySelector('.empty-state');
@@ -90,27 +99,32 @@ describe('c-todo-pending-list', () => {
         expect(emptyState.textContent).toContain('No pending tasks');
     });
 
-    it('shows the task count in the card title', async () => {
+    it('shows the total count (not just the current page size) in the card title', async () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        // Only 2 records come back on this page, but 22 exist in total across all pages
+        getPendingTasksAdapter.emit(page(MOCK_TASKS, 22));
         await flushPromises();
 
         const title = element.shadowRoot.querySelector('.card-title');
-        expect(title.textContent).toBe('Pending Tasks (2)');
+        expect(title.textContent).toBe('Pending Tasks (22)');
     });
 
-    it('filters the visible list as the user types in the search box', async () => {
+    it('filters the list server-side (via a debounced search) as the user types', async () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const searchInput = element.shadowRoot.querySelector('.search-input');
         searchInput.value = 'milk';
         searchInput.dispatchEvent(new CustomEvent('input'));
+
+        // Simulates the server responding to the debounced, narrowed search request
+        await flushDebounce();
+        getPendingTasksAdapter.emit(page([MOCK_TASKS[0]], 1));
         await flushPromises();
 
         const links = element.shadowRoot.querySelectorAll('.task-link');
@@ -122,12 +136,15 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const searchInput = element.shadowRoot.querySelector('.search-input');
         searchInput.value = 'nothing matches this';
         searchInput.dispatchEvent(new CustomEvent('input'));
+
+        await flushDebounce();
+        getPendingTasksAdapter.emit(page([], 0));
         await flushPromises();
 
         const emptyState = element.shadowRoot.querySelector('.empty-state');
@@ -140,7 +157,7 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const input = element.shadowRoot.querySelector('.new-task-input');
@@ -158,7 +175,7 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const addButton = element.shadowRoot.querySelector('.add-btn');
@@ -172,7 +189,7 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const deleteButton = element.shadowRoot.querySelector('.delete-button');
@@ -191,7 +208,7 @@ describe('c-todo-pending-list', () => {
         const element = createElement('c-todo-pending-list', { is: TodoPendingList });
         document.body.appendChild(element);
 
-        getPendingTasksAdapter.emit(MOCK_TASKS);
+        getPendingTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const deleteButton = element.shadowRoot.querySelector('.delete-button');
@@ -205,5 +222,39 @@ describe('c-todo-pending-list', () => {
         const links = element.shadowRoot.querySelectorAll('.task-link');
         expect(links.length).toBe(2);
         expect(deleteTask).not.toHaveBeenCalled();
+    });
+
+    it('hides pagination controls when everything fits on one page', async () => {
+        const element = createElement('c-todo-pending-list', { is: TodoPendingList });
+        document.body.appendChild(element);
+
+        getPendingTasksAdapter.emit(page(MOCK_TASKS, 2));
+        await flushPromises();
+
+        expect(element.shadowRoot.querySelector('.pagination-row')).toBeNull();
+    });
+
+    it('shows pagination controls and advances to the next page when there is more than one page', async () => {
+        const element = createElement('c-todo-pending-list', { is: TodoPendingList });
+        document.body.appendChild(element);
+
+        // 20 total records with a page size of 15 means 2 pages
+        getPendingTasksAdapter.emit(page(MOCK_TASKS, 20));
+        await flushPromises();
+
+        const paginationLabel = element.shadowRoot.querySelector('.pagination-label');
+        expect(paginationLabel.textContent).toBe('Page 1 of 2');
+
+        const [previousButton, nextButton] = element.shadowRoot.querySelectorAll('.pagination-btn');
+        expect(previousButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(false);
+
+        nextButton.click();
+        await flushPromises();
+        // Simulates the server responding with page 2's data
+        getPendingTasksAdapter.emit(page(MOCK_TASKS, 20));
+        await flushPromises();
+
+        expect(element.shadowRoot.querySelector('.pagination-label').textContent).toBe('Page 2 of 2');
     });
 });

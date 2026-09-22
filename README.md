@@ -29,7 +29,8 @@ A secure, feature-rich personal task manager built entirely on the Salesforce Pl
 - **Notes** — a free-text field per task, with a truncated preview on the row
 - **Recurring tasks** (Daily / Weekly / Monthly) — completing a recurring task automatically schedules and creates its next occurrence
 - **Drag-and-drop reordering** of pending tasks, persisted per user
-- **Live search** across task name and notes, on both the pending and completed lists
+- **Live search** by task name (debounced, server-side), on both the pending and completed lists
+- **Pagination** — both lists page in windows of 15, with Previous/Next controls and a "Page X of Y" indicator, so the list stays fast no matter how many tasks pile up
 
 ### Bulk actions & safety nets
 - **Mark All Complete** — completes every pending task in one click
@@ -84,19 +85,21 @@ A single `with sharing` Apex class exposes everything the UI needs via `@AuraEna
 
 | Method | Purpose |
 |---|---|
-| `getPendingTasks()` | Cacheable wire method backing the pending list, ordered by manual sort order |
-| `getCompletedTasks(filterType, cacheBuster)` | Cacheable wire method backing the completed list — supports `''` (all), `WEEK`, `MONTH`, and `ARCHIVED` filters |
+| `getPendingTasks(searchTerm, pageNumber, cacheBuster)` | Cacheable wire method backing the pending list — paginated (15/page), name-filtered, ordered by manual sort order |
+| `getCompletedTasks(filterType, searchTerm, pageNumber, cacheBuster)` | Cacheable wire method backing the completed list — paginated and name-filtered, supports `''` (all), `WEEK`, `MONTH`, and `ARCHIVED` filters |
 | `createTask(taskName)` | Creates a new pending task |
 | `updateTask(taskId, newName, priority, category, notes, recurrence)` | Saves all editable fields from the inline edit form |
 | `toggleTaskStatus(taskId)` | Flips a task between Pending and Completed, scheduling its next recurrence if applicable |
 | `deleteTask(taskId)` | Permanently deletes a task |
-| `reorderTasks(orderedTaskIds)` | Persists a new drag-and-drop order for the pending list |
+| `reorderTasks(orderedTaskIds, startIndex)` | Persists a new drag-and-drop order for the pending list, offset by the current page's starting index |
 | `markAllTasksComplete()` | Bulk-completes every pending task |
 | `clearCompletedTasks()` | Archives (not deletes) every completed task |
 | `restoreArchivedTask(taskId)` / `restoreAllArchivedTasks()` | Un-archives one or all archived tasks |
 | `materializeDueRecurrences()` | Called once when the pending list loads; creates the next occurrence for any recurring task whose scheduled date has arrived |
 
-The `cacheBuster` parameter on `getCompletedTasks` exists to work around a real Lightning Data Service gotcha: cacheable `@wire` methods cache per unique parameter combination, and `refreshApex()` only busts the cache entry for the *currently active* filter. Without it, a mutation made while viewing one filter (e.g. "All") could leave a stale cached response under a different filter (e.g. "Archived") that the client had queried earlier in the session. `cacheBuster` increments on every mutation, guaranteeing a fresh server call the next time any filter is selected.
+Both list methods return a `PagedTasks` wrapper (`records` + `totalCount`) so the client can render "Page X of Y" and disable Next appropriately from a single round trip. Pages are 15 records via SOQL `LIMIT`/`OFFSET`, and the UI debounces search input by 300ms before committing it to the wire (which also resets back to page 1).
+
+The `cacheBuster` parameter exists to work around a real Lightning Data Service gotcha: cacheable `@wire` methods cache per unique parameter combination, and `refreshApex()` only busts the cache entry for the *currently active* parameters. Without it, a mutation made on one page (or filter, or search term) could leave a stale cached response under a different page/filter/search that the client had already queried earlier in the session. `cacheBuster` increments on every mutation, guaranteeing a fresh server call the next time any combination, old or new, is selected. `reorderTasks`' `startIndex` exists so dragging a task within page 2 (say) assigns `Sort_Order__c` values starting at 15 instead of 0, so it doesn't collide with page 1's ordering — only one page's tasks are ever in the DOM at a time.
 
 ### LWC components
 
@@ -159,4 +162,4 @@ npm run test:unit
 ## Known limitations
 
 - **Recurring tasks are materialized lazily.** Completing a recurring task schedules its next occurrence for a future date, but that occurrence is only actually created the next time the pending list loads *after* that date has arrived — there's no background scheduled job. For a personal app opened regularly, this is a deliberate, low-complexity tradeoff rather than a bug.
-- **No pagination.** Both lists cap at 200 records via `LIMIT 200`. Comfortably generous for personal use, but a true pagination or "load more" pattern would be needed at much higher volume.
+- **Search matches task names only, not notes.** `Notes__c` is a Long Text Area field, and Salesforce doesn't allow SOQL `WHERE` clauses to filter on that field type, so server-side search is scoped to `Name`.

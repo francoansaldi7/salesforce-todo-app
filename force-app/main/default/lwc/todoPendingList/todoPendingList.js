@@ -15,9 +15,6 @@ import reorderTasks from '@salesforce/apex/TaskController.reorderTasks';
 import markAllTasksComplete from '@salesforce/apex/TaskController.markAllTasksComplete';
 import materializeDueRecurrences from '@salesforce/apex/TaskController.materializeDueRecurrences';
 
-// refreshApex re-runs a @wire query to get the latest data from Salesforce
-import { refreshApex } from '@salesforce/apex';
-
 // Shows a small pop-up notification (toast) at the top of the screen
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 
@@ -27,14 +24,34 @@ import { NavigationMixin } from 'lightning/navigation';
 // How long the undo bar stays up before a delete becomes permanent (ms)
 const UNDO_WINDOW_MS = 5000;
 
+// How long to wait after the user stops typing before searching the server (ms)
+const SEARCH_DEBOUNCE_MS = 300;
+
+// Must match TaskController.PAGE_SIZE — the server is authoritative on how many
+// records actually come back per page; this is only used to compute the page count.
+const PAGE_SIZE = 15;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default class TodoPendingList extends NavigationMixin(LightningElement) {
 
-    @track tasks;          // list of pending task records shown in the UI
+    @track tasks;          // the current page of pending task records shown in the UI
     newTaskName = '';      // text the user types in the "New Task" input
-    wiredResult;           // stored wire result so we can call refreshApex later
     isLoading = true;      // shows a spinner until the first data load finishes
-    searchTerm = '';        // live text used to filter the visible task list
+
+    searchTerm = '';            // raw text as the user types it (bound directly to the input)
+    committedSearchTerm = '';   // debounced value actually sent to the server
+    searchDebounceTimeoutId = null;
+
+    pageNumber = 1;   // 1-based current page
+    totalCount = 0;   // total pending tasks matching the current search, across all pages
+
+    // Passed to the wire alongside searchTerm/pageNumber purely to keep its cache key
+    // fresh. getPendingTasks is cacheable, and Salesforce's client-side wire cache is
+    // keyed per unique parameter combination — a mutation made on one page wouldn't
+    // otherwise invalidate a stale cached response for a page/search the client had
+    // already queried earlier in the session. Bumping this on every mutation forces a
+    // fresh server call the next time any page or search term, old or new, is selected.
+    cacheBuster = 0;
 
     editingTaskId = null;  // ID of the task currently being edited inline (null = none)
     // Draft values shown in the inline edit form — populated from the task being edited
@@ -49,12 +66,7 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
         // Recurring tasks whose next occurrence has come due are created lazily —
         // check for them once when the list loads, then refresh if anything changed.
         materializeDueRecurrences()
-            .then(() => {
-                if (this.wiredResult) {
-                    return refreshApex(this.wiredResult);
-                }
-                return undefined;
-            })
+            .then(() => this.bumpCache())
             .catch(() => {
                 // Non-critical — if this fails, recurring tasks simply won't advance
                 // until the next successful load. No need to surface an error toast.
@@ -65,6 +77,9 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
         // Avoid finalizing a delete (or touching component state) after teardown.
         if (this.pendingDeletionTimeoutId) {
             clearTimeout(this.pendingDeletionTimeoutId);
+        }
+        if (this.searchDebounceTimeoutId) {
+            clearTimeout(this.searchDebounceTimeoutId);
         }
     }
 
@@ -101,56 +116,89 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
     // ── Derived state ────────────────────────────────────────────────────────
 
     get cardTitle() {
-        const count = this.tasks ? this.tasks.length : 0;
-        return `Pending Tasks (${count})`;
+        return `Pending Tasks (${this.totalCount})`;
     }
 
     get hasNoTasks() {
-        return !this.tasks || this.tasks.length === 0;
-    }
-
-    // Tasks after the live search filter is applied
-    get filteredTasks() {
-        if (!this.tasks) {
-            return [];
-        }
-        const term = this.searchTerm.trim().toLowerCase();
-        if (!term) {
-            return this.tasks;
-        }
-        return this.tasks.filter(task =>
-            (task.Name || '').toLowerCase().includes(term) ||
-            (task.Notes__c || '').toLowerCase().includes(term)
-        );
+        return this.totalCount === 0;
     }
 
     get hasVisibleTasks() {
-        return this.filteredTasks.length > 0;
+        return !!this.tasks && this.tasks.length > 0;
     }
 
     // Shown when there are truly no pending tasks at all
     get showEmptyState() {
-        return !this.isLoading && this.hasNoTasks;
+        return !this.isLoading && this.hasNoTasks && !this.committedSearchTerm;
     }
 
     // Shown when there are tasks, but the search term matched none of them
     get showNoResultsState() {
-        return !this.isLoading && !this.hasNoTasks && this.filteredTasks.length === 0;
+        return !this.isLoading && this.hasNoTasks && !!this.committedSearchTerm;
+    }
+
+    // ── Pagination ───────────────────────────────────────────────────────────
+
+    get totalPages() {
+        return Math.max(1, Math.ceil(this.totalCount / PAGE_SIZE));
+    }
+
+    get showPagination() {
+        return this.totalCount > PAGE_SIZE;
+    }
+
+    get paginationLabel() {
+        return `Page ${this.pageNumber} of ${this.totalPages}`;
+    }
+
+    get isFirstPage() {
+        return this.pageNumber <= 1;
+    }
+
+    get isLastPage() {
+        return this.pageNumber >= this.totalPages;
+    }
+
+    handlePreviousPage() {
+        if (!this.isFirstPage) {
+            this.pageNumber -= 1;
+        }
+    }
+
+    handleNextPage() {
+        if (!this.isLastPage) {
+            this.pageNumber += 1;
+        }
     }
 
     // ── Data load ────────────────────────────────────────────────────────────
 
-    // @wire automatically calls getPendingTasks when the component loads.
-    // Every time the result changes (data or error), this function runs again.
-    @wire(getPendingTasks)
+    // @wire automatically calls getPendingTasks when the component loads, and again
+    // whenever searchTerm, pageNumber, or cacheBuster change (the $ prefix means
+    // "watch this property for changes").
+    @wire(getPendingTasks, {
+        searchTerm: '$committedSearchTerm',
+        pageNumber: '$pageNumber',
+        cacheBuster: '$cacheBuster'
+    })
     wiredTasks(result) {
-        this.wiredResult = result; // save a reference for refreshApex to use later
-        this.isLoading = false;    // hide the spinner once we have a response
+        this.isLoading = false; // hide the spinner once we have a response
 
         if (result.data) {
+            const { records, totalCount } = result.data;
+            this.totalCount = totalCount;
+
+            // If a mutation emptied out the page we're on (e.g. deleting the last task
+            // on the last page), step back a page rather than showing a dead end —
+            // this re-triggers the wire with the new pageNumber automatically.
+            if (records.length === 0 && this.pageNumber > 1) {
+                this.pageNumber -= 1;
+                return;
+            }
+
             // Add display-only helper properties so the template can stay simple —
             // LWC templates can't call getters with per-item parameters in a loop.
-            this.tasks = result.data.map(task => ({
+            this.tasks = records.map(task => ({
                 ...task,       // copy all existing task fields
                 isEditing: false,
                 priorityClass: `priority-dot priority-${(task.Priority__c || 'medium').toLowerCase()}`,
@@ -158,7 +206,7 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
                 isRecurring: !!(task.Recurrence__c && task.Recurrence__c !== 'None')
             }));
             // Lets the parent (todoApp) show a live count on the mobile tab bar.
-            this.dispatchEvent(new CustomEvent('pendingcountchange', { detail: { count: this.tasks.length } }));
+            this.dispatchEvent(new CustomEvent('pendingcountchange', { detail: { count: this.totalCount } }));
         } else if (result.error) {
             this.showToast('Error', 'Failed to load tasks', 'error');
         }
@@ -168,13 +216,25 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
     // The @api decorator makes it accessible from outside this component.
     @api
     refreshData() {
-        return refreshApex(this.wiredResult);
+        this.bumpCache();
+    }
+
+    // Forces every subsequent call to getPendingTasks — regardless of which page or
+    // search term, now or later — to hit the server instead of a possibly-stale cache.
+    bumpCache() {
+        this.cacheBuster += 1;
     }
 
     // ── Search ───────────────────────────────────────────────────────────────
 
     handleSearchChange(event) {
         this.searchTerm = event.target.value;
+
+        clearTimeout(this.searchDebounceTimeoutId);
+        this.searchDebounceTimeoutId = setTimeout(() => {
+            this.committedSearchTerm = this.searchTerm;
+            this.pageNumber = 1; // a new search always starts back at page 1
+        }, SEARCH_DEBOUNCE_MS);
     }
 
     // ── Add task ─────────────────────────────────────────────────────────────
@@ -195,7 +255,7 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
             .then(() => {
                 this.newTaskName = ''; // clear the input after a successful save
                 this.showToast('Success', 'Task created', 'success');
-                return refreshApex(this.wiredResult); // reload the list
+                this.bumpCache();
             })
             .catch(error => {
                 this.showToast('Error', error?.body?.message || 'Failed to create task', 'error');
@@ -221,7 +281,7 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
             .then(() => {
                 // Tell the parent component to also refresh the completed list
                 this.dispatchEvent(new CustomEvent('refreshlists'));
-                return refreshApex(this.wiredResult);
+                this.bumpCache();
             })
             .catch(error => {
                 this.showToast('Error', error?.body?.message || 'Failed to update task', 'error');
@@ -238,7 +298,7 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
             .then(() => {
                 this.showToast('Success', 'All tasks marked complete', 'success');
                 this.dispatchEvent(new CustomEvent('refreshlists'));
-                return refreshApex(this.wiredResult);
+                this.bumpCache();
             })
             .catch(error => {
                 this.showToast('Error', error?.body?.message || 'Failed to update tasks', 'error');
@@ -279,10 +339,10 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
         this.pendingDeletion = null;
         try {
             await deleteTask({ taskId });
-            await refreshApex(this.wiredResult);
+            this.bumpCache();
         } catch (error) {
             this.showToast('Error', error?.body?.message || 'Failed to delete task', 'error');
-            await refreshApex(this.wiredResult); // restore true server state on failure
+            this.bumpCache(); // restore true server state on failure
         }
     }
 
@@ -336,10 +396,14 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
         reordered.splice(toIndex, 0, movedTask);
         this.tasks = reordered; // optimistic reorder — updates immediately in the UI
 
-        reorderTasks({ orderedTaskIds: reordered.map(t => t.Id) })
+        // Offset by this page's starting index so reordering page 2 doesn't overwrite
+        // page 1's Sort_Order__c values — only one page is ever on screen at a time.
+        const startIndex = (this.pageNumber - 1) * PAGE_SIZE;
+
+        reorderTasks({ orderedTaskIds: reordered.map(t => t.Id), startIndex })
             .catch(error => {
                 this.showToast('Error', error?.body?.message || 'Failed to save new order', 'error');
-                refreshApex(this.wiredResult); // revert to server truth on failure
+                this.bumpCache(); // revert to server truth on failure
             });
     }
 
@@ -439,7 +503,7 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
 
             this.editingTaskId = null;
             this.showToast('Success', 'Task updated', 'success');
-            await refreshApex(this.wiredResult);
+            this.bumpCache();
 
         } catch (error) {
             this.showToast('Error', error?.body?.message || 'Failed to update task', 'error');

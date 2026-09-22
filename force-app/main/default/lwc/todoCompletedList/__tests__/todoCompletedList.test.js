@@ -52,8 +52,17 @@ const MOCK_TASKS = [
     }
 ];
 
+function page(records, totalCount) {
+    return { records, totalCount: totalCount === undefined ? records.length : totalCount };
+}
+
 function flushPromises() {
     return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// Waits out the search debounce (300ms) plus a little slack, then flushes microtasks.
+function flushDebounce() {
+    return new Promise(resolve => setTimeout(resolve, 350));
 }
 
 describe('c-todo-completed-list', () => {
@@ -68,45 +77,49 @@ describe('c-todo-completed-list', () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const links = element.shadowRoot.querySelectorAll('.task-link');
         expect(links.length).toBe(2);
     });
 
-    it('shows the task count in the card title', async () => {
+    it('shows the total count (not just the current page size) in the card title', async () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS, 27));
         await flushPromises();
 
         const title = element.shadowRoot.querySelector('.card-title');
-        expect(title.textContent).toBe('Completed Tasks (2)');
+        expect(title.textContent).toBe('Completed Tasks (27)');
     });
 
     it('shows the empty state when there are no completed tasks', async () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit([]);
+        getCompletedTasksAdapter.emit(page([], 0));
         await flushPromises();
 
         const emptyState = element.shadowRoot.querySelector('.empty-state');
         expect(emptyState.textContent).toContain('No completed tasks yet');
     });
 
-    it('filters the visible list as the user types in the search box', async () => {
+    it('filters the list server-side (via a debounced search) as the user types', async () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const searchInput = element.shadowRoot.querySelector('.search-input');
         searchInput.value = 'invoice';
         searchInput.dispatchEvent(new CustomEvent('input'));
+
+        // Simulates the server responding to the debounced, narrowed search request
+        await flushDebounce();
+        getCompletedTasksAdapter.emit(page([MOCK_TASKS[1]], 1));
         await flushPromises();
 
         const links = element.shadowRoot.querySelectorAll('.task-link');
@@ -123,7 +136,7 @@ describe('c-todo-completed-list', () => {
         const refreshHandler = jest.fn();
         element.addEventListener('refreshlists', refreshHandler);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const checkbox = element.shadowRoot.querySelector('lightning-input');
@@ -140,7 +153,7 @@ describe('c-todo-completed-list', () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const clearButton = element.shadowRoot.querySelector('.bulk-action-btn');
@@ -154,7 +167,7 @@ describe('c-todo-completed-list', () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit([]);
+        getCompletedTasksAdapter.emit(page([], 0));
         await flushPromises();
 
         const clearButton = element.shadowRoot.querySelector('.bulk-action-btn');
@@ -168,12 +181,12 @@ describe('c-todo-completed-list', () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const filterCombobox = element.shadowRoot.querySelector('.filter-combobox');
         filterCombobox.dispatchEvent(new CustomEvent('change', { detail: { value: 'ARCHIVED' } }));
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         expect(element.shadowRoot.querySelector('.bulk-action-btn').textContent.trim()).toBe('Restore All');
@@ -188,7 +201,7 @@ describe('c-todo-completed-list', () => {
 
         const filterCombobox = element.shadowRoot.querySelector('.filter-combobox');
         filterCombobox.dispatchEvent(new CustomEvent('change', { detail: { value: 'ARCHIVED' } }));
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const restoreButton = element.shadowRoot.querySelector('.restore-button');
@@ -204,7 +217,7 @@ describe('c-todo-completed-list', () => {
 
         const filterCombobox = element.shadowRoot.querySelector('.filter-combobox');
         filterCombobox.dispatchEvent(new CustomEvent('change', { detail: { value: 'ARCHIVED' } }));
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const restoreAllButton = element.shadowRoot.querySelector('.bulk-action-btn');
@@ -219,7 +232,7 @@ describe('c-todo-completed-list', () => {
 
         const filterCombobox = element.shadowRoot.querySelector('.filter-combobox');
         filterCombobox.dispatchEvent(new CustomEvent('change', { detail: { value: 'ARCHIVED' } }));
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const restoreAllButton = element.shadowRoot.querySelector('.bulk-action-btn');
@@ -235,7 +248,7 @@ describe('c-todo-completed-list', () => {
 
         const filterCombobox = element.shadowRoot.querySelector('.filter-combobox');
         filterCombobox.dispatchEvent(new CustomEvent('change', { detail: { value: 'ARCHIVED' } }));
-        getCompletedTasksAdapter.emit([]);
+        getCompletedTasksAdapter.emit(page([], 0));
         await flushPromises();
 
         const restoreAllButton = element.shadowRoot.querySelector('.bulk-action-btn');
@@ -249,7 +262,7 @@ describe('c-todo-completed-list', () => {
         const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
         document.body.appendChild(element);
 
-        getCompletedTasksAdapter.emit(MOCK_TASKS);
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS));
         await flushPromises();
 
         const deleteButton = element.shadowRoot.querySelector('.delete-button');
@@ -262,5 +275,39 @@ describe('c-todo-completed-list', () => {
         const undoBar = element.shadowRoot.querySelector('.undo-bar');
         expect(undoBar).not.toBeNull();
         expect(deleteTask).not.toHaveBeenCalled();
+    });
+
+    it('hides pagination controls when everything fits on one page', async () => {
+        const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
+        document.body.appendChild(element);
+
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS, 2));
+        await flushPromises();
+
+        expect(element.shadowRoot.querySelector('.pagination-row')).toBeNull();
+    });
+
+    it('shows pagination controls and advances to the next page when there is more than one page', async () => {
+        const element = createElement('c-todo-completed-list', { is: TodoCompletedList });
+        document.body.appendChild(element);
+
+        // 27 total records with a page size of 15 means 2 pages
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS, 27));
+        await flushPromises();
+
+        const paginationLabel = element.shadowRoot.querySelector('.pagination-label');
+        expect(paginationLabel.textContent).toBe('Page 1 of 2');
+
+        const [previousButton, nextButton] = element.shadowRoot.querySelectorAll('.pagination-btn');
+        expect(previousButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(false);
+
+        nextButton.click();
+        await flushPromises();
+        // Simulates the server responding with page 2's data
+        getCompletedTasksAdapter.emit(page(MOCK_TASKS, 27));
+        await flushPromises();
+
+        expect(element.shadowRoot.querySelector('.pagination-label').textContent).toBe('Page 2 of 2');
     });
 });
