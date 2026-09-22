@@ -3,6 +3,12 @@
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
+                <componentName>motivationalQuotes</componentName>
+                <identifier>c_motivationalQuotes</identifier>
+            </componentInstance>
+        </itemInstances>
+        <itemInstances>
+            <componentInstance>
                 <componentName>todoApp</componentName>
                 <identifier>c_todoApp</identifier>
             </componentInstance>

@@ -1,0 +1,35 @@
+<template>
+    <div class="quote-card">
+
+        <!-- Decorative large quote mark -->
+        <div class="quote-glyph" aria-hidden="true">&ldquo;</div>
+
+        <!-- Quote body — fades + slides on transition -->
+        <div class={quoteContentClass} aria-live="polite">
+            <blockquote class="quote-text">{currentQuote.text}</blockquote>
+            <p class="quote-author">— {currentQuote.author}</p>
+        </div>
+
+        <!-- Dot indicators -->
+        <div class="dots" role="tablist" aria-label="Quote position">
+            <template for:each={dots} for:item="dot">
+                <button
+                    key={dot.index}
+                    class={dot.cls}
+                    aria-label={dot.label}
+                    data-index={dot.index}
+                    onclick={handleDotClick}
+                ></button>
+            </template>
+        </div>
+
+        <!-- Footer: countdown + amber progress bar -->
+        <div class="quote-footer">
+            <span class="countdown-label">Next in {countdown}s</span>
+            <div class="progress-track" aria-hidden="true">
+                <div class="progress-bar" style={progressStyle}></div>
+            </div>
+        </div>
+
+    </div>
+</template>

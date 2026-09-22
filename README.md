@@ -4,6 +4,10 @@ A secure, feature-rich personal task manager built entirely on the Salesforce Pl
 
 ## Screenshots
 
+**Rotating motivational quote** — sits at the top of the app page for a bit of daily motivation, auto-advancing every 60 seconds (or jump to any quote via the dots):
+
+![Motivational quote widget](screenshots/motivational-banner.png)
+
 **Pending and Completed lists side by side** — priority dots, category pills, search, and bulk actions (Mark All Complete / Clear Completed) on both sides:
 
 ![Pending and Completed lists](screenshots/app-overview.png)
@@ -15,10 +19,6 @@ A secure, feature-rich personal task manager built entirely on the Salesforce Pl
 **Archived view** — tasks cleared from the Completed list land here, with per-task Restore and a "Restore All" bulk action:
 
 ![Archived view](screenshots/archived-view.png)
-
-**Rotating motivational quote widget** — shown on the same App page for a bit of daily motivation. This is a separate, reusable component (`motivationalQuotes`) shared with another app in the same org, so it isn't part of this repo:
-
-![Motivational quote widget](screenshots/motivational-banner.png)
 
 ## Features
 
@@ -67,6 +67,7 @@ force-app/main/default/
 │   └── todolisticonvector.*              # App logo
 ├── flexipages/                           # App Home pages hosting the todoApp component
 ├── lwc/
+│   ├── motivationalQuotes/               # Rotating motivational quote widget (top of the app page)
 │   ├── todoApp/                          # Parent: greeting banner, mobile tabs, layout
 │   ├── todoPendingList/                  # Pending tasks: create, edit, reorder, complete, delete
 │   └── todoCompletedList/                # Completed tasks: filter, edit, restore, clear, delete
@@ -99,6 +100,7 @@ The `cacheBuster` parameter on `getCompletedTasks` exists to work around a real 
 
 ### LWC components
 
+- **`motivationalQuotes`** — a self-contained widget at the top of the app page: a rotating carousel of motivational quotes with a 60-second auto-advance, dot navigation, and a countdown progress bar. No Apex or object dependencies — just a static quote library
 - **`todoApp`** — the parent shell: personalized greeting banner, mobile tab bar with live counts, and the two-column (desktop) / tab-switched (mobile) layout
 - **`todoPendingList`** — the active task list: quick-add, search, drag-and-drop reorder, inline editing (name/priority/category/notes/recurrence), bulk complete, and optimistic delete-with-undo
 - **`todoCompletedList`** — the history/archive view: filter dropdown (All/Week/Month/Archived), search, inline editing, restore/restore-all, clear-completed (archive), and delete-with-undo
