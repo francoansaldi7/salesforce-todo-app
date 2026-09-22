@@ -2,6 +2,24 @@
 
 A secure, feature-rich personal task manager built entirely on the Salesforce Platform, using Lightning Web Components (LWC) and Apex. No due dates, no clutter — just a fast, personal to-do list with the extras that make daily task management actually pleasant: priorities, categories, notes, recurring tasks, drag-and-drop ordering, archiving, and undo.
 
+## Screenshots
+
+**Pending and Completed lists side by side** — priority dots, category pills, search, and bulk actions (Mark All Complete / Clear Completed) on both sides:
+
+![Pending and Completed lists](screenshots/app-overview.png)
+
+**Completed list filter** — switch between All, This Week, This Month, and Archived:
+
+![Completed list filter dropdown](screenshots/completed-filter-dropdown.png)
+
+**Archived view** — tasks cleared from the Completed list land here, with per-task Restore and a "Restore All" bulk action:
+
+![Archived view](screenshots/archived-view.png)
+
+**Rotating motivational quote widget** — shown on the same App page for a bit of daily motivation. This is a separate, reusable component (`motivationalQuotes`) shared with another app in the same org, so it isn't part of this repo:
+
+![Motivational quote widget](screenshots/motivational-banner.png)
+
 ## Features
 
 ### Core task management
