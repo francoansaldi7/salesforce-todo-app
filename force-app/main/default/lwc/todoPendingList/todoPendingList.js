@@ -255,6 +255,9 @@ export default class TodoPendingList extends NavigationMixin(LightningElement) {
             .then(() => {
                 this.newTaskName = ''; // clear the input after a successful save
                 this.showToast('Success', 'Task created', 'success');
+                // New tasks sort to the top of the list — jump back to page 1 so the
+                // user actually sees it land there, even if they were on a later page.
+                this.pageNumber = 1;
                 this.bumpCache();
             })
             .catch(error => {

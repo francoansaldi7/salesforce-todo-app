@@ -65,7 +65,7 @@ public with sharing class TaskController {
             AND OwnerId = :UserInfo.getUserId()
             AND Name LIKE :pattern
             WITH SECURITY_ENFORCED
-            ORDER BY Sort_Order__c ASC NULLS LAST, CreatedDate DESC
+            ORDER BY Sort_Order__c ASC NULLS FIRST, CreatedDate DESC
             LIMIT :PAGE_SIZE
             OFFSET :pageOffset
         ];

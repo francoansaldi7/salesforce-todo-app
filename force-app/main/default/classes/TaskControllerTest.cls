@@ -112,6 +112,26 @@ private class TaskControllerTest {
         Assert.areEqual('Pending Task 1', records[1].Name);
     }
 
+    /** A task with no manual Sort_Order__c (i.e. never dragged — including a brand new
+     *  task) must appear ahead of any task that has been manually sorted, so newly
+     *  created tasks land at the top of the list rather than the bottom. */
+    @IsTest
+    static void testGetPendingTasks_unsortedTasksAppearBeforeManuallySortedOnes() {
+        To_Do_Task__c sortedTask = [SELECT Id FROM To_Do_Task__c WHERE Name = 'Pending Task 1' LIMIT 1];
+        update new To_Do_Task__c(Id = sortedTask.Id, Sort_Order__c = 0);
+        // 'Pending Task 2' is left with no Sort_Order__c, as a newly created task would be.
+
+        Test.startTest();
+        List<To_Do_Task__c> records = TaskController.getPendingTasks(null, 1, 0).records;
+        Test.stopTest();
+
+        Assert.areEqual(
+            'Pending Task 2', records[0].Name,
+            'The unsorted task must appear first, ahead of the manually sorted one'
+        );
+        Assert.areEqual('Pending Task 1', records[1].Name);
+    }
+
     /** With more than one page of pending tasks, page 1 must hold exactly 15 records
      *  and totalCount must reflect every pending task, not just the current page. */
     @IsTest
