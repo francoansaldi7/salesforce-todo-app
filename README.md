@@ -8,7 +8,7 @@ A secure, feature-rich personal task manager built entirely on the Salesforce Pl
 
 ![Motivational quote widget](screenshots/motivational-banner.png)
 
-**Pending and Completed lists side by side** — priority dots, category pills, search, and bulk actions (Mark All Complete / Clear Completed) on both sides:
+**Pending and Completed lists side by side** — priority dots, category pills, search, pagination, and bulk actions (Mark All Complete / Clear Completed) on both sides:
 
 ![Pending and Completed lists](screenshots/app-overview.png)
 
