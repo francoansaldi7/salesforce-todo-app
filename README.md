@@ -23,7 +23,7 @@ A secure, feature-rich personal task manager built entirely on the Salesforce Pl
 ## Features
 
 ### Core task management
-- Create, rename, complete/un-complete, and delete tasks
+- Create, rename, complete/un-complete, and delete tasks — new tasks land at the top of the pending list
 - **Priority levels** (High / Medium / Low) shown as a colored dot on each task
 - **Categories** (Work, Personal, Errands, Shopping, Other) shown as a pill
 - **Notes** — a free-text field per task, with a truncated preview on the row
@@ -63,7 +63,7 @@ force-app/main/default/
 │   └── TO_DO_App.app-meta.xml            # Lightning App definition
 ├── classes/
 │   ├── TaskController.cls                # All server-side logic (see below)
-│   └── TaskControllerTest.cls            # 34 unit tests, 100% of controller logic covered
+│   └── TaskControllerTest.cls            # 41 unit tests, 100% of controller logic covered
 ├── contentassets/
 │   └── todolisticonvector.*              # App logo
 ├── flexipages/                           # App Home pages hosting the todoApp component
@@ -146,13 +146,13 @@ Every user of the app needs the `To_Do_App_Access` permission set assigned — w
 
 ## Testing
 
-**Apex** — 34 tests covering every controller method, including negative cases and cross-user IDOR protection tests (verifying one user genuinely cannot read, edit, complete, reorder, or delete another user's tasks):
+**Apex** — 41 tests covering every controller method, including negative cases and cross-user IDOR protection tests (verifying one user genuinely cannot read, edit, complete, reorder, or delete another user's tasks):
 
 ```bash
 sf apex run test --target-org myOrg --code-coverage --result-format human
 ```
 
-**LWC (Jest)** — 28 tests covering rendering, search, CRUD actions, bulk actions, undo, and cross-component state (task counts, tab switching):
+**LWC (Jest)** — 32 tests covering rendering, search, pagination, CRUD actions, bulk actions, undo, and cross-component state (task counts, tab switching):
 
 ```bash
 npm install
