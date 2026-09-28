@@ -4,6 +4,10 @@ A secure, feature-rich personal task manager built entirely on the Salesforce Pl
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+## Demo
+
+![App demo](screenshots/demo.gif)
+
 ## Screenshots
 
 **Rotating motivational quote** — sits at the top of the app page for a bit of daily motivation, auto-advancing every 60 seconds (or jump to any quote via the dots):
