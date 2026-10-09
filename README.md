@@ -132,23 +132,24 @@ The `cacheBuster` parameter exists to work around a real Lightning Data Service 
 
 ## Deployment
 
-Requires the [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli).
+New to Salesforce deployments? Follow the **[step-by-step installation guide (PDF)](docs/Installation-Guide.pdf)**. It walks through everything from installing the CLI to opening the app in a free Trailhead Playground, with screenshots and a troubleshooting section.
+
+Quick version, using the [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli):
 
 ```bash
 # 1. Authorize the target org
 sf org login web --alias myOrg
 
 # 2. Deploy all metadata
-sf project deploy start --target-org myOrg
+sf project deploy start --source-dir force-app --target-org myOrg
 
-# 3. Assign the permission set that grants field-level access to the app's custom fields
+# 3. Assign the permission set: it grants the app, its tabs and its custom fields
 sf org assign permset --name To_Do_App_Access --target-org myOrg
-
-# 4. Assign the app / tabs to your profile or a permission set as needed via Setup,
-#    then open the "TO DO App" from the App Launcher.
 ```
 
-Every user of the app needs the `To_Do_App_Access` permission set assigned — without it, Salesforce's own field-level security will correctly block access to the app's custom fields, since deploying fields via Metadata API doesn't automatically grant profile access the way creating them in Setup does.
+Then open **TO DO App** from the App Launcher.
+
+Every user of the app needs the `To_Do_App_Access` permission set assigned. It makes the app and its tabs visible, and without it Salesforce's own field-level security will correctly block access to the app's custom fields, since deploying fields via Metadata API doesn't automatically grant profile access the way creating them in Setup does.
 
 ## Testing
 
